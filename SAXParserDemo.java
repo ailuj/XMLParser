@@ -9,7 +9,7 @@ import org.xml.sax.helpers.DefaultHandler;
 public class SAXParserDemo{
     public static void main(String[] args){
         try{
-            File inputFile = new File("/path/to/xml/file/reuters-corpus/reut2-001.xml");
+            File inputFile = new File("reuters-corpus/reut2-001.xml");
             SAXParserFactory factory = SAXParserFactory.newInstance();
             SAXParser saxParser = factory.newSAXParser();
             UserHandler userhandler = new UserHandler();

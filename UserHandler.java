@@ -20,6 +20,7 @@ public class UserHandler extends DefaultHandler {
     ArrayList<String> topics = new ArrayList<String>();
     ArrayList<String> places = new ArrayList<String>();
     ArrayList<String> people = new ArrayList<String>();
+    ArrayList<String> text = new ArrayList<>();
 
     @Override
     public void startElement(
@@ -49,22 +50,21 @@ public class UserHandler extends DefaultHandler {
             } else if(elName.equalsIgnoreCase("body")){
                 rBody = true;
             }
-
-
     }
 
     @Override
     public void endElement(
             String uri, String localName, String elName) throws SAXException{
-
         if(elName.equalsIgnoreCase("lewis")) {
             Set<String> topicSet = new HashSet<String>(topics);
             Set<String> placesSet = new HashSet<String>(places);
             Set<String> peopleSet = new HashSet<String>(people);
+            Set<String> textSet = new HashSet<String>(text);
             System.out.println("results: ");
             System.out.println("topics total: " + topics.size() + " topics distinct: " + topicSet.size());
             System.out.println("places total: " + places.size() + " places distinct: " + placesSet.size());
             System.out.println("people total: " + people.size() + " people distinct: " + peopleSet.size());
+            System.out.println("text total in body and title: " + text.size() + " text distinct in body and title: " + textSet.size());
         }
 
     }
@@ -99,6 +99,14 @@ public class UserHandler extends DefaultHandler {
                 }
             }
             rPeople = false;
+        } else if(rTitle || rBody){
+            for(int i = 0; i < array.length; i++) {
+                if (array[i] != "") {
+                    text.add(array[i]);
+                }
+            }
+            if(rTitle) rTitle = false;
+            if(rBody) rBody = false;
         }
 
     }
