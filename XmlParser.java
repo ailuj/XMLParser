@@ -6,16 +6,30 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.PriorityQueue;
+import java.util.*;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.Exchanger;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+class Entry implements Comparable<Entry>{
+	public String key;
+	public int value;
+	public Entry(String key, int value){
+		this.key=key;
+		this.value=value;
+	}
+
+	@Override
+	public int compareTo(Entry other){
+		return new Integer(this.value).compareTo(new Integer(other.value));
+	}
+}
 
 public class XmlParser extends Thread {
 
@@ -27,14 +41,12 @@ public class XmlParser extends Thread {
 		this.threadNumber=threadNumber;
 	}
 
-	Semaphore intLock=new Semaphore(1,true);
-	int noOfDocs=0;
-	int noOfTotalWords=0;
-	int threadFinished=0;
-	PriorityBlockingQueue<String> wordCounts=new PriorityBlockingQueue<String>();
-	PriorityBlockingQueue<String> topicCounts=new PriorityBlockingQueue<String>();
-	PriorityBlockingQueue<String> placeCounts=new PriorityBlockingQueue<String>();
-	PriorityBlockingQueue<String> peopleCounts=new PriorityBlockingQueue<String>();
+	ReentrantLock intLock =new ReentrantLock();
+	static int                                   noOfDocs       =0;
+	static int                                   threadFinished =0;
+	static TreeMap<String,Integer>               topicCounts    = new TreeMap<>();
+	static TreeMap<String,Integer>               placeCounts    = new TreeMap<>();
+	static TreeMap<String,Integer>               peopleCounts   = new TreeMap<>();
 
 	public static void main(String [] args){
 		//read arguments
@@ -60,33 +72,141 @@ public class XmlParser extends Thread {
 		}
 		//initialize and start threads
 		int threadCount=corpusFileList.size();
+		XmlParser[] threadList=new XmlParser[threadCount];
 		for (int i=0;i<threadCount;i++){
-			new XmlParser(corpusFileList.get(i),i).start();
-
+			XmlParser parser=new XmlParser(corpusFileList.get(i),i);
+			threadList[i]=parser;
+			parser.start();
 		}
+		for (int i=0;i<threadCount;i++){
+			try{
+				threadList[i].join();
+			}
+			catch (Exception e){
+			}
+		}
+		//print all values
+		System.out.println("Anzahl Dokumente: "+noOfDocs);
+
+		int noOfTotalTopics=0;
+		if(!topicCounts.isEmpty()) {
+			noOfTotalTopics = topicCounts.values().stream().mapToInt(Integer::intValue).sum();
+		}
+		System.out.println("Anzahl Topics: "+noOfTotalTopics+" ("+topicCounts.size()+" distinct)");
+
+		int noOfTotalPlaces=0;
+		if(!placeCounts.isEmpty()) {
+		noOfTotalPlaces = placeCounts.values().stream().mapToInt(Integer::intValue).sum();
 	}
+		System.out.println("Anzahl Places: "+noOfTotalPlaces+" ("+placeCounts.size()+" distinct)");
+
+		int noOfTotalPeople=0;
+		if(!peopleCounts.isEmpty()) {
+			noOfTotalPeople = peopleCounts.values().stream().mapToInt(Integer::intValue).sum();
+		}
+		System.out.println("Anzahl People: "+noOfTotalPeople+" ("+peopleCounts.size()+" distinct)");
+}
+
+
 
 	public void run() {
 		System.out.println("Thread "+this.threadNumber+" started. Reading in file "+this.corpusFile);
 		try(BufferedReader br = new BufferedReader(new FileReader(corpusFile))) {
 			String line = br.readLine();
-			Pattern p=Pattern.compile("<TOPICS>");
-			while(line!=null){
-				Matcher m=p.matcher(line);
-				m.matches();
-				if(m.find()) {
-					System.out.println(this.threadNumber+", "+line);
+			Pattern documentStart = Pattern.compile("<REUTERS");
+			Pattern topicLine = Pattern.compile("<TOPICS>(.*)</TOPICS>");
+			Pattern dTags = Pattern.compile("<D>(.+?)</D>");
+			Pattern peopleLine = Pattern.compile("<PEOPLE>(.*)</PEOPLE>");
+			Pattern placesLine = Pattern.compile("<PLACES>(.*)</PLACES>");
+
+			Pattern title = Pattern.compile("<TITLE>(.*)</TITLE>");
+
+			boolean insideBody=false;
+			String text="";
+			while (line != null) {
+				//if new document
+				Matcher m = documentStart.matcher(line);
+				if (m.find()) {
+					System.out.println("Document");
+					intLock.lock();
+					noOfDocs++;
+					intLock.unlock();
 				}
-				line=br.readLine();
+
+				//if topicLine
+				m = topicLine.matcher(line);
+				if (m.find()) {
+					m = dTags.matcher(line);
+					while (m.find()) {
+						System.out.println("Topic "+m.group(1));
+						String topic = m.group(1);
+						intLock.lock();
+						if (topicCounts.containsKey(topic)) {
+							Integer value = topicCounts.get(topic);
+							topicCounts.put(topic, ++value);
+						}
+						else {
+							topicCounts.put(topic,1);
+						}
+						intLock.unlock();
+
+					}
+				}
+				//if personLine
+				m = peopleLine.matcher(line);
+				if (m.find()) {
+					m = dTags.matcher(line);
+					while (m.find()) {
+						System.out.println("People "+m.group(1));
+						String topic = m.group(1);
+						intLock.lock();
+						if (peopleCounts.containsKey(topic)) {
+							Integer value = peopleCounts.get(topic);
+							peopleCounts.put(topic, ++value);
+						}
+						else {
+							peopleCounts.put(topic,1);
+						}
+						intLock.unlock();
+					}
+				}
+				//if placeLine
+				m = placesLine.matcher(line);
+				if (m.find()) {
+					m = dTags.matcher(line);
+					while (m.find()) {
+						System.out.println("Place "+m.group(1));
+						String place = m.group(1);
+						intLock.lock();
+						if (placeCounts.containsKey(place)) {
+							Integer value = placeCounts.get(place);
+							placeCounts.put(place, ++value);
+						}
+						else {
+							placeCounts.put(place,1);
+						}
+						intLock.unlock();
+					}
+				}
+
+				//if title
+				m = title.matcher(line);
+				if (m.find()) {
+					System.out.println("Title "+m.group(1));
+					text=text+" "+m.group(1);
+				}
+
+				line = br.readLine();
 			}
-			return;
 		}
 		catch(Exception e){
 			System.out.println(e);
-			intLock.tryAcquire();
+			intLock.lock();
 			threadFinished++;
-			intLock.release();
+			intLock.unlock();
 		}
-		// analyzes one corpus file
+		intLock.lock();
+		threadFinished++;
+		intLock.unlock();
 	}
 }
