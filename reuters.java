@@ -1,11 +1,5 @@
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.File;
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.Map;
+import java.io.*;
+import java.util.*;
 
 public class reuters {
 	public static int countText(String s, int textCount, HashMap<String,Integer> text) {
@@ -29,7 +23,7 @@ public class reuters {
 		int pos = 0;
 		String tmp = null;
 		while (s.length() > pos) {
-			tmp = s.substring(pos+3, s.indexOf("</D>", pos));
+			tmp = s.substring(s.indexOf("<D>", pos)+3, s.indexOf("</D>", pos)).toLowerCase();
 			if (tokenSet.contains(tmp)) {
 				count++;
 			} else {
@@ -40,6 +34,20 @@ public class reuters {
 		}
 		return count;
 	}
+
+	public static <K, V extends Comparable<? super V>> LinkedList<Map.Entry<K, V>> mostFrequent(Map<K, V> map) {
+        LinkedList<Map.Entry<K, V>> list = new LinkedList<Map.Entry<K, V>>(map.entrySet());
+        Collections.sort(list, new Comparator<Map.Entry<K, V>>() {
+            public int compare(Map.Entry<K, V> o1, Map.Entry<K, V> o2) {
+                return (o2.getValue()).compareTo(o1.getValue());
+            }
+        });
+        for (int i=0; i<30; i++) {
+        	Map.Entry<K, V> entry = list.get(i);
+        	System.out.println(entry.getKey() + ": " + ((Integer) entry.getValue()).intValue());
+        }
+        return list;
+    }
 
 	public static void main(String[] args) {
 		BufferedReader br = null;
@@ -70,12 +78,15 @@ public class reuters {
 								s = s.substring(0,s.indexOf("</TITLE>"));
 							}
 							textCount = countText(s, textCount, text);
-						}
-						if (s.contains("</BODY>")) {
-							body = false;
+							continue;
 						}
 						if (body) {
+							if (s.contains("</BODY>")) {
+								body = false;
+								s = s.substring(0,s.indexOf("</BODY>"));
+							}
 							textCount = countText(s, textCount, text);
+							continue;
 						}
 						if (s.contains("<REUTERS")) {
 							docCount++;
@@ -110,29 +121,6 @@ public class reuters {
 				}
 			}
 		}
-		//häufigste Wörter finden
-		HashSet<Integer> wordCounts = new HashSet<Integer>();
-		int min = 0;
-		Iterator itMap = text.entrySet().iterator();
-		while (itMap.hasNext()) {
-			Map.Entry entry = (Map.Entry) itMap.next();
-			if (((Integer) entry.getValue()).intValue() >= min) {
-				if (wordCounts.size() >= 30) {
-					wordCounts.remove(min);
-					Iterator itSet = wordCounts.iterator();
-					min = Integer.MAX_VALUE;
-					while (itSet.hasNext()) {
-						Integer count = (Integer) itSet.next();
-						if (count < min) {
-							min = count;
-						}
-					}
-					wordCounts.add((Integer) entry.getValue());
-				} else {
-					wordCounts.add((Integer) entry.getValue());
-				}
-			}
-		}
 		//Ausgabe
 		System.out.println("Anzahl Dokumente: " + docCount);
 		System.out.println("Anzahl Wörter: " + textCount + " (" + text.size() + " distinct)");
@@ -140,12 +128,6 @@ public class reuters {
 		System.out.println("Anzahl Places: " + placeCount + " (" + places.size() + " distinct)");
 		System.out.println("Anzahl People: " + peopleCount + " (" + people.size() + " distinct)");
 		System.out.println("\nhäufigste Wörter:");
-		itMap = text.entrySet().iterator();
-		while (itMap.hasNext()) {
-			Map.Entry entry = (Map.Entry) itMap.next();
-			if (((Integer) entry.getValue()).intValue() >= min) {
-				System.out.println(entry.getKey() + ": " + ((Integer) entry.getValue()).intValue());
-			}
-		}
+		mostFrequent(text);
 	}
 }
